@@ -38,8 +38,8 @@ import Direction._
 import Breadcrumb._
 
 object MazeModel {
-  val HEIGHT = 50
-  val WIDTH = 50
+  val HEIGHT = 10
+  val WIDTH = 10
 }
 object MazeConsts {
   val frameBorder = 25
@@ -52,13 +52,23 @@ object MazeConsts {
 }
 import MazeModel._
 import MazeConsts._
-
+import Audio._
 object BasicSound {
   def beep() = java.awt.Toolkit.getDefaultToolkit().beep()
 }
+case class Sounds(audioSynth: AudioSynth) {
+  def beep() =
+    audioSynth.tone(600, 25)
+  def blip() =
+    audioSynth.blip(400, 800, 20, 80)
+  def sweepUp() =
+    audioSynth.sweep(200, 2000, 5, 2000)
+  def sweepDown() =
+    audioSynth.sweep(4000, 200, -10, 4000)
+}
 
-class MazeModel {
-  import BasicSound._
+class MazeModel(sounds: Sounds) {
+  import sounds._
   var cells = Array.tabulate(WIDTH, HEIGHT)((i, j) => Cell(i, j))
 
   // set everything as not visited and with no trail
@@ -137,10 +147,11 @@ class MazeModel {
             n.pi = c  // set predecessor node
             n.trail = Forward
             update
+            beep()
             if (n.i == exit.x && n.j == exit.y) throw new Exception("Done")
             Thread.sleep(solveDelayMs)
             doNextCell(n)
-            beep()
+            blip()
             n.trail = Backward
             update
           }
@@ -229,12 +240,16 @@ class MazePanel(m: MazeModel) extends Panel {
 
 class MazeMainPanel extends Applet {
   import MazeConsts._
-  import BasicSound._
-
-  val m = new MazeModel()
-  lazy val mp = new MazePanel(m)
+  //import BasicSound._
 
   object ui extends UI with Reactor {
+    import Audio._
+    import AudioConsts._
+    val audioSynth = AudioSynth.mkAudioSynth(sampleRate, bitDepth)
+    val sounds = Sounds(audioSynth)
+    import sounds._
+    val m = new MazeModel(sounds)
+    lazy val mp = new MazePanel(m)
 
     def init() =
       contents = mp
@@ -266,7 +281,7 @@ class MazeMainPanel extends Applet {
       m.showSolution(update)
       mp.repaint()
 
-      beep()
+      sweepUp()
       Thread.sleep(delayTimeMs)
 
       m.clearVisited()
@@ -286,16 +301,17 @@ class MazeMainPanel extends Applet {
       m.showSolution(update)
       mp.repaint()
 
-      beep()
+      sweepUp()
       Thread.sleep(delayTimeMs)
 
       m.clearVisited()
-
       this.repaint()
 
-      beep()
+      sweepDown()
       Thread.sleep(delayTimeMs)
+
       println("Ending...")
+      audioSynth.stop()
     }
   }
 }
@@ -320,7 +336,7 @@ object Maze {
 
 object Cell {
   val size = frameWidth / WIDTH // each cell is square
-  val cellBorder = 5
+  val cellBorder = 10
   val origin = Cell(0, 0)
 }
 
