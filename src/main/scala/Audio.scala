@@ -99,12 +99,7 @@ case class AudioSynth(line: SourceDataLine, sampleRate: Int, bitDepth: Int) {
 
     (0 to noOfSamples).map { i =>
       val phaseAngle = 2.0 * Math.PI * i * freq / sampleRate
-      val sineVal = sine(phaseAngle)
-      if (sineVal >= 0.0)
-        maxVol
-      else if (sineVal < 0.0)
-        maxVol * - 1.0
-      else 0
+      sine(phaseAngle).sign * maxVol
     }.map(_.toByte).toArray
   }
   def drain(): Unit = line.drain()
@@ -137,9 +132,15 @@ case class AudioSynth(line: SourceDataLine, sampleRate: Int, bitDepth: Int) {
     val audioBuffer2 = createSineWaveBuffer(f2, durMs)
     (1 to steps).foreach { _ =>
       line.write(audioBuffer1, 0, audioBuffer1.length)
-      line.drain
+      line.drain()
       line.write(audioBuffer2, 0, audioBuffer2.length)
-      line.drain
+      line.drain()
+    }
+  }
+  def blipSweep(f1: Int, f2: Int, f3: Int, steps: Int, substeps: Int, lenMs: Int) : Unit = {
+    val dur = lenMs / ((f2 - f1) / steps)
+    (f1 to f2).by(steps).foreach { freq =>
+      blip(freq - f3/2, freq + f3/2, substeps, dur)
     }
   }
   def randomTones(f1: Int, f2: Int, steps: Int, lenMs: Int) : Unit = {

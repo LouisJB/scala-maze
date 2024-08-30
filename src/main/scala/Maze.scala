@@ -65,6 +65,8 @@ case class Sounds(audioSynth: AudioSynth) {
     audioSynth.sweep(200, 2000, 5, 2000)
   def sweepDown() =
     audioSynth.sweep(4000, 200, -10, 4000)
+  def blipSweep() =
+    audioSynth.blipSweep(501, 2500, 200, 100, 4, 5000)
 }
 
 class MazeModel(sounds: Sounds) {
@@ -301,13 +303,13 @@ class MazeMainPanel extends Applet {
       m.showSolution(update)
       mp.repaint()
 
-      sweepUp()
+      sweepDown()
       Thread.sleep(delayTimeMs)
 
       m.clearVisited()
       this.repaint()
 
-      sweepDown()
+      blipSweep()
       Thread.sleep(delayTimeMs)
 
       println("Ending...")
