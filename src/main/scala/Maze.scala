@@ -56,17 +56,17 @@ import Audio._
 object BasicSound {
   def beep() = java.awt.Toolkit.getDefaultToolkit().beep()
 }
-case class Sounds(audioSynth: AudioSynth) {
+case class Sounds(audioSynth: Option[AudioSynth]) {
   def beep() =
-    audioSynth.tone(600, 25)
+    audioSynth.foreach(_.tone(600, 25))
   def blip() =
-    audioSynth.blip(400, 800, 20, 80)
+    audioSynth.foreach(_.blip(400, 800, 20, 80))
   def sweepUp() =
-    audioSynth.sweep(200, 2000, 5, 2000)
+    audioSynth.foreach(_.sweep(200, 2000, 5, 2000))
   def sweepDown() =
-    audioSynth.sweep(4000, 200, -10, 4000)
+    audioSynth.foreach(_.sweep(4000, 200, -10, 4000))
   def blipSweep() =
-    audioSynth.blipSweep(501, 2500, 200, 100, 4, 5000)
+    audioSynth.foreach(_.blipSweep(501, 2500, 200, 100, 4, 5000))
 }
 
 class MazeModel(sounds: Sounds) {
@@ -240,15 +240,18 @@ class MazePanel(m: MazeModel) extends Panel {
     m.cells.foreach(_.foreach(_.draw(g)))
 }
 
-class MazeMainPanel extends Applet {
+class MazeMainPanel(noSound: Boolean) extends Applet {
   import MazeConsts._
   //import BasicSound._
 
   object ui extends UI with Reactor {
     import Audio._
     import AudioConsts._
-    val audioSynth = AudioSynth.mkAudioSynth(sampleRate, bitDepth)
-    val sounds = Sounds(audioSynth)
+    val sounds = {
+      val maybeAudioSynth = if (noSound) None else
+        Some(AudioSynth.mkAudioSynth(sampleRate, bitDepth))
+      Sounds(maybeAudioSynth)
+    }
     import sounds._
     val m = new MazeModel(sounds)
     lazy val mp = new MazePanel(m)
@@ -313,7 +316,7 @@ class MazeMainPanel extends Applet {
       Thread.sleep(delayTimeMs)
 
       println("Ending...")
-      audioSynth.stop()
+      audioSynth.foreach(_.stop())
     }
   }
 }
@@ -321,8 +324,11 @@ class MazeMainPanel extends Applet {
 // standard Java app of the maze using JFrame
 object Maze {
   def main(args: Array[String]): Unit = {
+    val noSound = if (args.length > 0)
+	 args(0).trim.toLowerCase == "nosound"
+    else false
     val sizeDims = new java.awt.Dimension(frameWidth + frameBorder, frameHeight + frameBorder)
-    val mazeMainPanel = new MazeMainPanel()
+    val mazeMainPanel = new MazeMainPanel(noSound)
     mazeMainPanel.setMinimumSize(new java.awt.Dimension(sizeDims))
     val frame = new JFrame()
     frame.setBounds(0, 0, sizeDims.width, sizeDims.height)
@@ -345,17 +351,20 @@ object Cell {
 // represent a Cell of the maze
 case class Cell(i: Int, j: Int) {
   import Cell._
-  var north : Boolean = true
-  var south : Boolean = true
-  var east : Boolean = true
-  var west : Boolean = true
+  import scala.collection.mutable.Set
+  private val dirs: Set[Direction] = Set.empty ++= allDirections
+  private def north = dirs.contains(North)
+  private def south = dirs.contains(South)
+  private def east = dirs.contains(East)
+  private def west = dirs.contains(West)
+
+  private val x = i * size
+  private val y = j * size
+
   var visited : Boolean = false
   var pi : Cell = null  // predecessor cell
   var trail : Breadcrumb = Clear
   var gen : Int = 0
-
-  private val x = i * size
-  private val y = j * size
 
   def draw(g: Graphics): Unit = {
 
@@ -383,23 +392,10 @@ case class Cell(i: Int, j: Int) {
     if (west) g.drawLine(x, y, x, y + size)
   }
 
-  def clear(dir : Direction) = dir match {
-    case North => north = false
-    case South => south = false
-    case East => east = false
-    case West => west = false
-  }
+  def clear(dir : Direction) = dirs -= dir
 
-  def getDirections(): List[Direction] = {
-    var d = List[Direction]()
-
-    if (!north) d = North :: d
-    if (!south) d = South :: d
-    if (!east) d = East :: d
-    if (!west) d = West :: d
-
-    d
-  }
+  def getDirections(): List[Direction] =
+    (allDirections.toSet -- dirs).toList
 
   def getRndDirections() : List[Direction] = {
     implicit val r = Rand.rand
