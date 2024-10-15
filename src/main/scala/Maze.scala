@@ -38,8 +38,8 @@ import Direction._
 import Breadcrumb._
 
 object MazeModel {
-  val HEIGHT = 10
-  val WIDTH = 10
+  val HEIGHT = 40
+  val WIDTH = 40
 }
 object MazeConsts {
   val frameBorder = 25
@@ -58,7 +58,7 @@ object BasicSound {
 }
 case class Sounds(audioSynth: Option[AudioSynth]) {
   def beep() =
-    audioSynth.foreach(_.tone(600, 25))
+    audioSynth.foreach(_.sine(600, 25))
   def blip() =
     audioSynth.foreach(_.blip(400, 800, 20, 80))
   def sweepUp() =
@@ -249,7 +249,7 @@ class MazeMainPanel(noSound: Boolean) extends Applet {
     import AudioConsts._
     val sounds = {
       val maybeAudioSynth = if (noSound) None else
-        Some(AudioSynth.mkAudioSynth(sampleRate, bitDepth))
+        Some(AudioSynth.mkAudioSynth(defaultSampleRate, defaultBitDepth))
       Sounds(maybeAudioSynth)
     }
     import sounds._
