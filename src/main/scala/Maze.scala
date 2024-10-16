@@ -6,13 +6,13 @@ package maze
 import scala.util.Random
 
 import scala.swing.Panel
-import scala.swing.Reactor
-import scala.swing.Applet
 
-import javax.swing.JFrame
 import javax.swing.WindowConstants
 import java.awt.Graphics
 import java.awt.Color
+import scala.swing.Frame
+import java.awt.Rectangle
+import scala.swing.MainFrame
 
 object Direction extends Enumeration {
   type Direction = Value
@@ -38,8 +38,8 @@ import Direction._
 import Breadcrumb._
 
 object MazeModel {
-  val HEIGHT = 40
-  val WIDTH = 40
+  val HEIGHT = 10
+  val WIDTH = 10
 }
 object MazeConsts {
   val frameBorder = 25
@@ -47,7 +47,7 @@ object MazeConsts {
   val frameWidth = frameHeight
 
   val delayTimeMs = 4000
-  val solveDelayMs = 400
+  val solveDelayMs = 100
   val delayStopMs = 2000
 }
 import MazeModel._
@@ -60,13 +60,17 @@ case class Sounds(audioSynth: Option[AudioSynth]) {
   def beep() =
     audioSynth.foreach(_.sine(600, 25))
   def blip() =
-    audioSynth.foreach(_.blip(400, 800, 20, 80))
+    audioSynth.foreach(_.blip(200, 400, 20, 200))
   def sweepUp() =
     audioSynth.foreach(_.sweep(200, 2000, 5, 2000))
   def sweepDown() =
-    audioSynth.foreach(_.sweep(4000, 200, -10, 4000))
-  def blipSweep() =
-    audioSynth.foreach(_.blipSweep(501, 2500, 200, 100, 4, 5000))
+    audioSynth.foreach(_.sweep(3000, 300, -10, 2000))
+  def blipSweep1() =
+    audioSynth.foreach(_.blipSweep(500, 2500, 100, 100, 4, 2000))
+  def blipSweep2() =
+    audioSynth.foreach(_.blipSweep(500, 2500, 200, 100, 4, 5000))
+  def silence(lenMs: Int) = // blocks for duration playing no audio to avoid audio stall
+    audioSynth.foreach(_.silence(lenMs))
 }
 
 class MazeModel(sounds: Sounds) {
@@ -151,16 +155,16 @@ class MazeModel(sounds: Sounds) {
             update
             beep()
             if (n.i == exit.x && n.j == exit.y) throw new Exception("Done")
-            Thread.sleep(solveDelayMs)
+            silence(solveDelayMs)
             doNextCell(n)
-            blip()
             n.trail = Backward
             update
+            blip()
           }
           case _ =>
         }
       })
-      Thread.sleep(solveDelayMs)
+      silence(solveDelayMs)
     }
     doNextCell(startCell)
   }
@@ -187,6 +191,7 @@ class MazeModel(sounds: Sounds) {
         c.trail = Forward
 
         update
+        beep()
 
         if (c.i == exit.x && c.j == exit.y) throw new Exception("Done")
 
@@ -202,7 +207,7 @@ class MazeModel(sounds: Sounds) {
           }
         })
 
-        Thread.sleep(solveDelayMs) // add a little delay so we can watch the bfs explore and find the solution
+        silence(solveDelayMs) // add a little delay so we can watch the bfs explore and find the solution
       }
     }
   }
@@ -240,84 +245,80 @@ class MazePanel(m: MazeModel) extends Panel {
     m.cells.foreach(_.foreach(_.draw(g)))
 }
 
-class MazeMainPanel(noSound: Boolean) extends Applet {
+class MazeMainPanel(noSound: Boolean) extends Panel {
   import MazeConsts._
-  //import BasicSound._
+  import Audio._
+  import AudioConsts._
 
-  object ui extends UI with Reactor {
-    import Audio._
-    import AudioConsts._
-    val sounds = {
-      val maybeAudioSynth = if (noSound) None else
-        Some(AudioSynth.mkAudioSynth(defaultSampleRate, defaultBitDepth))
-      Sounds(maybeAudioSynth)
+  val sounds = {
+    val maybeAudioSynth = if (noSound) None else
+      Some(AudioSynth.mkAudioSynth(defaultSampleRate, defaultBitDepth))
+    Sounds(maybeAudioSynth)
+  }
+  import sounds._
+  val m = new MazeModel(sounds)
+  lazy val mp = new MazePanel(m)
+
+  def update =
+    mp.repaint()
+
+  def start() : Unit = {
+    println("Starting...")
+    blip()
+
+    println("Generating Maze")
+    m.generateMaze(update)
+    beep()
+    silence(delayTimeMs)
+
+    m.clearVisited()
+
+    println("Solving Maze using DFS")
+    try {
+      m.solveMazeDFS(update)
     }
-    import sounds._
-    val m = new MazeModel(sounds)
-    lazy val mp = new MazePanel(m)
-
-    def init() =
-      contents = mp
-
-    override def start() : Unit = {
-      println("Starting...")
-      def update =
-        this.repaint()
-
-      println("Generating Maze")
-      m.generateMaze(update)
-      beep()
-      Thread.sleep(delayTimeMs)
-
-      m.clearVisited()
-
-      println("Solving Maze using DFS")
-      try {
-        m.solveMazeDFS(update)
-      }
-      catch {
-        case e : Exception =>
-      }
-
-      beep()
-      Thread.sleep(delayTimeMs)
-
-      m.clearVisited()
-      m.showSolution(update)
-      mp.repaint()
-
-      sweepUp()
-      Thread.sleep(delayTimeMs)
-
-      m.clearVisited()
-
-      println("Solving Maze using BFS")
-      try {
-        m.solveMazeBFS(update)
-      }
-      catch {
-        case e : Exception =>
-      }
-
-      beep()
-      Thread.sleep(delayTimeMs)
-
-      m.clearVisited()
-      m.showSolution(update)
-      mp.repaint()
-
-      sweepDown()
-      Thread.sleep(delayTimeMs)
-
-      m.clearVisited()
-      this.repaint()
-
-      blipSweep()
-      Thread.sleep(delayTimeMs)
-
-      println("Ending...")
-      audioSynth.foreach(_.stop())
+    catch {
+      case e : Exception =>
     }
+
+    blipSweep1()
+    silence(delayTimeMs)
+
+    m.clearVisited()
+    m.showSolution(update)
+    update
+
+    sweepUp()
+    silence(delayTimeMs)
+
+    m.clearVisited()
+
+    println("Solving Maze using BFS")
+    try {
+      m.solveMazeBFS(update)
+    }
+    catch {
+      case e : Exception =>
+    }
+
+    blipSweep1()
+    silence(delayTimeMs)
+
+    m.clearVisited()
+    m.showSolution(update)
+    update
+
+    sweepDown()
+    silence(delayTimeMs)
+
+    m.clearVisited()
+    update
+
+    blipSweep2()
+    silence(delayTimeMs)
+
+    println("Ending...")
+    audioSynth.foreach(_.stop())
   }
 }
 
@@ -325,20 +326,18 @@ class MazeMainPanel(noSound: Boolean) extends Applet {
 object Maze {
   def main(args: Array[String]): Unit = {
     val noSound = if (args.length > 0)
-	 args(0).trim.toLowerCase == "nosound"
+	    args(0).trim.toLowerCase == "nosound"
     else false
     val sizeDims = new java.awt.Dimension(frameWidth + frameBorder, frameHeight + frameBorder)
     val mazeMainPanel = new MazeMainPanel(noSound)
-    mazeMainPanel.setMinimumSize(new java.awt.Dimension(sizeDims))
-    val frame = new JFrame()
-    frame.setBounds(0, 0, sizeDims.width, sizeDims.height)
-    frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE)
-    frame.setTitle("Simple Maze Demo v0.1")
-    frame.add(mazeMainPanel)
-    frame.setLocation(0, 0)
-    frame.setVisible(true)
-    mazeMainPanel.init
-    mazeMainPanel.start
+    val frame = new MainFrame()
+    frame.minimumSize = new java.awt.Dimension(sizeDims)
+    frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
+    frame.title = "Simple Maze Demo v0.1"
+    frame.contents = mazeMainPanel.mp
+    frame.visible = true
+    mazeMainPanel.start()
+    frame.dispose()
   }
 }
 
