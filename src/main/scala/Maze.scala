@@ -6,13 +6,12 @@ package maze
 import scala.util.Random
 
 import scala.swing.Panel
-
-import javax.swing.WindowConstants
+import scala.swing.Frame
+import scala.swing.MainFrame
 import java.awt.Graphics
 import java.awt.Color
-import scala.swing.Frame
 import java.awt.Rectangle
-import scala.swing.MainFrame
+
 
 object Direction extends Enumeration {
   type Direction = Value
@@ -245,7 +244,7 @@ class MazePanel(m: MazeModel) extends Panel {
     m.cells.foreach(_.foreach(_.draw(g)))
 }
 
-class MazeMainPanel(noSound: Boolean) extends Panel {
+class Maze(noSound: Boolean) {
   import MazeConsts._
   import Audio._
   import AudioConsts._
@@ -329,14 +328,14 @@ object Maze {
 	    args(0).trim.toLowerCase == "nosound"
     else false
     val sizeDims = new java.awt.Dimension(frameWidth + frameBorder, frameHeight + frameBorder)
-    val mazeMainPanel = new MazeMainPanel(noSound)
+    val maze = new Maze(noSound)
     val frame = new MainFrame()
     frame.minimumSize = new java.awt.Dimension(sizeDims)
     frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
     frame.title = "Simple Maze Demo v0.1"
-    frame.contents = mazeMainPanel.mp
+    frame.contents = maze.mp
     frame.visible = true
-    mazeMainPanel.start()
+    maze.start()
     frame.dispose()
   }
 }
