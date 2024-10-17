@@ -100,31 +100,29 @@ class MazeModel(sounds: Sounds) {
     endCell.clear(South)
 
     // recursively process the next cell
-    def doNextCell(c: Cell) : Unit = {
+    def doNextCell(c: Cell): Unit = {
       c.visited = true
       c.trail = Forward
 
-      c.getRndDirections().foreach(dir => {
-        getCell(c, dir) match {
-          case Some(n) =>
-            if (n.visited != true) {
-              n.visited = true
-              c.clear(dir)
-              n.clear(getInv(dir))
-              n.trail = Forward
-              update
-              doNextCell(n)
-              n.trail = Clear
-              update
-            }
-          case None =>
+      c.getRndDirections().foreach { dir =>
+        getCell(c, dir).foreach { n =>
+          if (n.visited != true) {
+            n.visited = true
+            c.clear(dir)
+            n.clear(getInv(dir))
+            n.trail = Forward
+            update
+            doNextCell(n)
+            n.trail = Clear
+            update
+          }
         }
-      })
+      }
     }
     doNextCell(startCell)
   }
 
-  def solveMaze(update :  => Unit) =
+  def solveMaze(update: => Unit) =
     solveMazeBFS(update)
 
   // find the maze solution using dfs from the start node until the end
@@ -140,9 +138,9 @@ class MazeModel(sounds: Sounds) {
         c.visited = true
         c.trail = Forward
 
-        c.getDirections().foreach(dir => {
-          getCell(c, dir) match {
-            case Some(n) => if (n.visited != true) {
+        c.getDirections().foreach { dir =>
+          getCell(c, dir).foreach { n =>
+            if (n.visited != true) {
               n.visited = true
               n.pi = Some(c)  // set predecessor node
               n.trail = Forward
@@ -155,9 +153,8 @@ class MazeModel(sounds: Sounds) {
               update
               blip()
             }
-            case _ =>
           }
-        })
+        }
         silence(solveDelayMs)
       }
       doNextCell(startCell)
@@ -193,17 +190,16 @@ class MazeModel(sounds: Sounds) {
 
           if (c.i == exit.x && c.j == exit.y) throw new Exception("Done")
 
-          c.getDirections().foreach(dir => {
-            getCell(c, dir) match {
-              case Some(n) if (n.visited != true) => {
+          c.getDirections().foreach { dir =>
+            getCell(c, dir).foreach { n =>
+              if (n.visited != true) {
                 n.pi = Some(c)
                 n.gen = c.gen
                 q.enqueue(n)
                 gen = gen + 1
               }
-              case _ =>
             }
-          })
+          }
 
           silence(solveDelayMs) // add a little delay so we can watch the bfs explore and find the solution
         }
@@ -241,24 +237,25 @@ class MazeModel(sounds: Sounds) {
     case West   => if (c.i > 0) Some(cells(c.i-1)(c.j)) else None
   }
 
+  def mapCells(f: Cell => Cell) = 
+    cells.foreach(_.foreach(f))
+
   // set everything as not visited and with no trail
-  def clearVisited() =
-    cells.foreach(_.foreach(c => {
-        c.visited = false
-        c.trail = Clear
-      }
-    ))
-  def clearAll() =
-    cells.foreach(_.foreach(c => {
-        c.clearAll()
-      }
-    ))
+  def clearVisited() = mapCells { cell =>
+    cell.visited = false
+    cell.trail = Clear
+    cell
+  }
+  def clearAll() = mapCells { cell =>
+    cell.clearAll()
+    cell
+  }
 }
 
 // a scala.swing.Panel, override paint(Graphics2D) to paint each of the cells
-class MazePanel(m: MazeModel) extends Panel {
+class MazePanel(mm: MazeModel) extends Panel {
   override def paint(g: java.awt.Graphics2D) =
-    m.cells.foreach(_.foreach(_.draw(g)))
+    mm.cells.foreach(_.foreach(_.draw(g)))
 }
 
 class Maze(noSound: Boolean) {
@@ -342,26 +339,27 @@ object Maze {
     frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
     frame.title = "Simple Maze Demo v0.1"
     frame.contents = maze.mazePanel
-    // old way to do it but did not scala-swing has a wrapper for it yet 
-    val keyListener = new KeyListener() {
-      @Override
-      def keyPressed(args: KeyEvent): Unit = {
-        val key = args.getKeyCode()
-        if ((key == KeyEvent.VK_X) || (key == KeyEvent.VK_Q)) {
-          frame.dispose()
-          System.exit(0)
-        }
-      }
-      @Override
-      def keyReleased(arg: KeyEvent): Unit = {}
-      @Override
-      def keyTyped(arg: KeyEvent): Unit = {}
-    }
-    frame.peer.addKeyListener(keyListener)
+    frame.peer.addKeyListener(mkKeyListener(frame))
     frame.pack().centerOnScreen()
     frame.visible = true
     maze.run()
     frame.dispose()
+  }
+
+  // old way to do it but did not scala-swing has a wrapper for it yet
+  private def mkKeyListener(frame: Frame) = new KeyListener() {
+    @Override
+    def keyPressed(args: KeyEvent): Unit = {
+      val key = args.getKeyCode()
+      if ((key == KeyEvent.VK_X) || (key == KeyEvent.VK_Q)) {
+        frame.dispose()
+        System.exit(0)
+      }
+    }
+    @Override
+    def keyReleased(arg: KeyEvent): Unit = {}
+    @Override
+    def keyTyped(arg: KeyEvent): Unit = {}
   }
 }
 
