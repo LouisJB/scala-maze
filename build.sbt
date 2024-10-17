@@ -1,4 +1,3 @@
-//val scalaVer = "2.12.18"
 val scalaVer = "2.13.14"
 
 lazy val root = project

@@ -8,9 +8,12 @@ import scala.util.Random
 import scala.swing.Panel
 import scala.swing.Frame
 import scala.swing.MainFrame
+import scala.swing.event.KeyPressed
 import java.awt.Graphics
 import java.awt.Color
 import java.awt.Rectangle
+import java.awt.event.KeyListener
+import java.awt.event.KeyEvent
 
 
 object Direction extends Enumeration {
@@ -76,14 +79,6 @@ class MazeModel(sounds: Sounds) {
   import sounds._
   var cells = Array.tabulate(WIDTH, HEIGHT)((i, j) => Cell(i, j))
 
-  // set everything as not visited and with no trail
-  def clearVisited() =
-    cells.foreach(_.foreach(c => {
-        c.visited = false
-        c.trail = Clear
-      }
-    ))
-
   // generate maze
   def generateMaze(update: => Unit): Unit = {
     val exit = new Point(WIDTH - 1, HEIGHT - 1)
@@ -140,32 +135,36 @@ class MazeModel(sounds: Sounds) {
 
     val startCell = cells(0)(0)
     startCell.clear(North)
+    try {
+      def doNextCell(c: Cell): Unit = {
+        c.visited = true
+        c.trail = Forward
 
-    def doNextCell(c: Cell): Unit = {
-      c.visited = true
-      c.trail = Forward
-
-      c.getDirections().foreach(dir => {
-        getCell(c, dir) match {
-          case Some(n) => if (n.visited != true) {
-            n.visited = true
-            n.pi = c  // set predecessor node
-            n.trail = Forward
-            update
-            beep()
-            if (n.i == exit.x && n.j == exit.y) throw new Exception("Done")
-            silence(solveDelayMs)
-            doNextCell(n)
-            n.trail = Backward
-            update
-            blip()
+        c.getDirections().foreach(dir => {
+          getCell(c, dir) match {
+            case Some(n) => if (n.visited != true) {
+              n.visited = true
+              n.pi = Some(c)  // set predecessor node
+              n.trail = Forward
+              update
+              beep()
+              if (n.i == exit.x && n.j == exit.y) throw new Exception("Done")
+              silence(solveDelayMs)
+              doNextCell(n)
+              n.trail = Backward
+              update
+              blip()
+            }
+            case _ =>
           }
-          case _ =>
-        }
-      })
-      silence(solveDelayMs)
+        })
+        silence(solveDelayMs)
+      }
+      doNextCell(startCell)
     }
-    doNextCell(startCell)
+    catch {
+      case e : Exception =>
+    }
   }
 
   // find the maze solution using dfs from the start node until the end node is located
@@ -180,34 +179,38 @@ class MazeModel(sounds: Sounds) {
 
     q.enqueue(startCell)
     var gen = 0
+    try {
+      while (!q.isEmpty) {
+        val c = q.dequeue()
+        c.gen = q.size
 
-    while (!q.isEmpty) {
-      val c = q.dequeue()
-      c.gen = q.size
+        if (c.visited != true) {
+          c.visited = true
+          c.trail = Forward
 
-      if (c.visited != true) {
-        c.visited = true
-        c.trail = Forward
+          update
+          beep()
 
-        update
-        beep()
+          if (c.i == exit.x && c.j == exit.y) throw new Exception("Done")
 
-        if (c.i == exit.x && c.j == exit.y) throw new Exception("Done")
-
-        c.getDirections().foreach(dir => {
-          getCell(c, dir) match {
-            case Some(n) if (n.visited != true) => {
-              n.pi = c
-              n.gen = c.gen
-              q.enqueue(n)
-              gen = gen + 1
+          c.getDirections().foreach(dir => {
+            getCell(c, dir) match {
+              case Some(n) if (n.visited != true) => {
+                n.pi = Some(c)
+                n.gen = c.gen
+                q.enqueue(n)
+                gen = gen + 1
+              }
+              case _ =>
             }
-            case _ =>
-          }
-        })
+          })
 
-        silence(solveDelayMs) // add a little delay so we can watch the bfs explore and find the solution
+          silence(solveDelayMs) // add a little delay so we can watch the bfs explore and find the solution
+        }
       }
+    }
+    catch {
+      case e : Exception =>
     }
   }
 
@@ -219,11 +222,12 @@ class MazeModel(sounds: Sounds) {
     println(">>showSolution")
 
     // Stream.iterate(cells(exit.n)(exit.y))(_.pi).takeWhile(_ != null)
-    LazyList.iterate(cells(exit.x)(exit.y))(_.pi).takeWhile(_ != null).foreach {
-      n => {
+    val cell: Option[Cell] = Some(cells(exit.x)(exit.y))
+    LazyList.iterate(cell)(_.flatMap(_.pi)).takeWhile(_ != None).foreach {
+      case Some(n) =>
         n.trail = Forward
         update
-      }
+      case _ =>
     }
 
     println("<<showSolution")
@@ -236,6 +240,19 @@ class MazeModel(sounds: Sounds) {
     case East   => if (c.i < WIDTH - 1) Some(cells(c.i+1)(c.j)) else None
     case West   => if (c.i > 0) Some(cells(c.i-1)(c.j)) else None
   }
+
+  // set everything as not visited and with no trail
+  def clearVisited() =
+    cells.foreach(_.foreach(c => {
+        c.visited = false
+        c.trail = Clear
+      }
+    ))
+  def clearAll() =
+    cells.foreach(_.foreach(c => {
+        c.clearAll()
+      }
+    ))
 }
 
 // a scala.swing.Panel, override paint(Graphics2D) to paint each of the cells
@@ -255,67 +272,58 @@ class Maze(noSound: Boolean) {
     Sounds(maybeAudioSynth)
   }
   import sounds._
-  val m = new MazeModel(sounds)
-  lazy val mp = new MazePanel(m)
+  val mazeModel = new MazeModel(sounds)
+  lazy val mazePanel = new MazePanel(mazeModel)
 
   def update =
-    mp.repaint()
+    mazePanel.repaint()
 
-  def start() : Unit = {
+  def run() : Unit = {
     println("Starting...")
-    blip()
+    while (true) {
+      blip()
+      mazeModel.clearAll()
+      println("Generating Maze")
+      mazeModel.generateMaze(update)
+      beep()
+      silence(delayTimeMs)
 
-    println("Generating Maze")
-    m.generateMaze(update)
-    beep()
-    silence(delayTimeMs)
+      mazeModel.clearVisited()
 
-    m.clearVisited()
+      println("Solving Maze using DFS")
+      mazeModel.solveMazeDFS(update)
 
-    println("Solving Maze using DFS")
-    try {
-      m.solveMazeDFS(update)
+      blipSweep1()
+      silence(delayTimeMs)
+
+      mazeModel.clearVisited()
+      mazeModel.showSolution(update)
+      update
+
+      sweepUp()
+      silence(delayTimeMs)
+
+      mazeModel.clearVisited()
+
+      println("Solving Maze using BFS")
+      mazeModel.solveMazeBFS(update)
+
+      blipSweep1()
+      silence(delayTimeMs)
+
+      mazeModel.clearVisited()
+      mazeModel.showSolution(update)
+      update
+
+      sweepDown()
+      silence(delayTimeMs)
+
+      mazeModel.clearVisited()
+      update
+
+      blipSweep2()
+      silence(delayTimeMs)
     }
-    catch {
-      case e : Exception =>
-    }
-
-    blipSweep1()
-    silence(delayTimeMs)
-
-    m.clearVisited()
-    m.showSolution(update)
-    update
-
-    sweepUp()
-    silence(delayTimeMs)
-
-    m.clearVisited()
-
-    println("Solving Maze using BFS")
-    try {
-      m.solveMazeBFS(update)
-    }
-    catch {
-      case e : Exception =>
-    }
-
-    blipSweep1()
-    silence(delayTimeMs)
-
-    m.clearVisited()
-    m.showSolution(update)
-    update
-
-    sweepDown()
-    silence(delayTimeMs)
-
-    m.clearVisited()
-    update
-
-    blipSweep2()
-    silence(delayTimeMs)
-
     println("Ending...")
     audioSynth.foreach(_.stop())
   }
@@ -333,9 +341,26 @@ object Maze {
     frame.minimumSize = new java.awt.Dimension(sizeDims)
     frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
     frame.title = "Simple Maze Demo v0.1"
-    frame.contents = maze.mp
+    frame.contents = maze.mazePanel
+    // old way to do it but did not scala-swing has a wrapper for it yet 
+    val keyListener = new KeyListener() {
+      @Override
+      def keyPressed(args: KeyEvent): Unit = {
+        val key = args.getKeyCode()
+        if ((key == KeyEvent.VK_X) || (key == KeyEvent.VK_Q)) {
+          frame.dispose()
+          System.exit(0)
+        }
+      }
+      @Override
+      def keyReleased(arg: KeyEvent): Unit = {}
+      @Override
+      def keyTyped(arg: KeyEvent): Unit = {}
+    }
+    frame.peer.addKeyListener(keyListener)
+    frame.pack().centerOnScreen()
     frame.visible = true
-    maze.start()
+    maze.run()
     frame.dispose()
   }
 }
@@ -360,7 +385,7 @@ case class Cell(i: Int, j: Int) {
   private val y = j * size
 
   var visited : Boolean = false
-  var pi : Cell = null  // predecessor cell
+  var pi : Option[Cell] = None  // predecessor cell
   var trail : Breadcrumb = Clear
   var gen : Int = 0
 
@@ -391,6 +416,13 @@ case class Cell(i: Int, j: Int) {
   }
 
   def clear(dir : Direction) = dirs -= dir
+  def clearAll() = {
+    dirs ++= allDirections
+    visited = false
+    trail = Clear
+    gen = 0
+    pi = None
+  }
 
   def getDirections(): List[Direction] =
     (allDirections.toSet -- dirs).toList
