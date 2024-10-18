@@ -3,17 +3,18 @@
  */
 package maze
 
-import scala.util.Random
-
-import scala.swing.Panel
+import java.awt.Color
+import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.Rectangle
+import java.awt.event.KeyEvent
+import java.awt.event.KeyListener
+import scala.swing.BorderPanel
 import scala.swing.Frame
 import scala.swing.MainFrame
+import scala.swing.Panel
 import scala.swing.event.KeyPressed
-import java.awt.Graphics
-import java.awt.Color
-import java.awt.Rectangle
-import java.awt.event.KeyListener
-import java.awt.event.KeyEvent
+import scala.util.Random
 
 
 object Direction extends Enumeration {
@@ -45,10 +46,11 @@ object MazeModel {
 }
 object MazeConsts {
   val frameBorder = 25
-  val frameHeight = 1000 - frameBorder
+  val frameHeight = 800 - frameBorder
   val frameWidth = frameHeight
 
   val delayTimeMs = 4000
+  val createDelayMs = 50
   val solveDelayMs = 100
   val delayStopMs = 2000
 }
@@ -112,6 +114,7 @@ class MazeModel(sounds: Sounds) {
             n.clear(getInv(dir))
             n.trail = Forward
             update
+            Thread.sleep(createDelayMs)
             doNextCell(n)
             n.trail = Clear
             update
@@ -254,8 +257,10 @@ class MazeModel(sounds: Sounds) {
 
 // a scala.swing.Panel, override paint(Graphics2D) to paint each of the cells
 class MazePanel(mm: MazeModel) extends Panel {
-  override def paint(g: java.awt.Graphics2D) =
-    mm.cells.foreach(_.foreach(_.draw(g)))
+  override def paintComponent(g: java.awt.Graphics2D) = {
+    super.paintComponent(g)
+    mm.mapCells(c => {c.draw(g); c })
+  }
 }
 
 class Maze(noSound: Boolean) {
@@ -275,7 +280,7 @@ class Maze(noSound: Boolean) {
   def update =
     mazePanel.repaint()
 
-  def run() : Unit = {
+  def run(): Unit = {
     println("Starting...")
     while (true) {
       blip()
@@ -335,10 +340,11 @@ object Maze {
     val sizeDims = new java.awt.Dimension(frameWidth + frameBorder, frameHeight + frameBorder)
     val maze = new Maze(noSound)
     val frame = new MainFrame()
-    frame.minimumSize = new java.awt.Dimension(sizeDims)
+    frame.preferredSize = new java.awt.Dimension(sizeDims)
     frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
     frame.title = "Simple Maze Demo v0.1"
-    frame.contents = maze.mazePanel
+    maze.mazePanel.background_= = new Color(124, 255, 64)
+    frame.contents = new BorderPanel { add(maze.mazePanel, BorderPanel.Position.Center) }
     frame.peer.addKeyListener(mkKeyListener(frame))
     frame.pack().centerOnScreen()
     frame.visible = true
@@ -351,6 +357,7 @@ object Maze {
     @Override
     def keyPressed(args: KeyEvent): Unit = {
       val key = args.getKeyCode()
+      // hand X and Q as exit/quit
       if ((key == KeyEvent.VK_X) || (key == KeyEvent.VK_Q)) {
         frame.dispose()
         System.exit(0)
@@ -364,7 +371,6 @@ object Maze {
 }
 
 object Cell {
-  val size = frameWidth / WIDTH // each cell is square
   val cellBorder = 10
   val origin = Cell(0, 0)
 }
@@ -379,17 +385,18 @@ case class Cell(i: Int, j: Int) {
   private def east = dirs.contains(East)
   private def west = dirs.contains(West)
 
-  private val x = i * size
-  private val y = j * size
-
-  var visited : Boolean = false
-  var pi : Option[Cell] = None  // predecessor cell
-  var trail : Breadcrumb = Clear
-  var gen : Int = 0
+  var visited: Boolean = false
+  var pi: Option[Cell] = None  // predecessor cell
+  var trail: Breadcrumb = Clear
+  var gen: Int = 0
 
   def draw(g: Graphics): Unit = {
+    val bounds = g.getClipBounds()
+    val size = Math.min(bounds.width / WIDTH, bounds.height / HEIGHT)
+    val x = bounds.x + i * size
+    val y = bounds.y + j * size
 
-    def fillCell() = 
+    def fillCell() =
       g.fillRect(x + cellBorder, y + cellBorder, size - cellBorder * 2, size - cellBorder * 2)
     
     trail match {
@@ -432,13 +439,13 @@ case class Cell(i: Int, j: Int) {
 
   def getColour(n : Int) = n match {
     case 0 => Color.RED
-    case 1 => Color.BLUE
-    case 2 => Color.CYAN
+    case 1 => Color.ORANGE
+    case 2 => Color.PINK
     case 3 => Color.YELLOW
-    case 4 => Color.PINK
-    case 5 => Color.ORANGE
-    case 6 => Color.MAGENTA
-    case _ => Color.GREEN
+    case 4 => Color.GREEN.darker()
+    case 5 => Color.CYAN
+    case 6 => Color.BLUE
+    case _ => Color.MAGENTA
   }
 }
 
