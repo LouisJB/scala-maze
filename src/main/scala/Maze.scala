@@ -36,6 +36,7 @@ object MazeConsts {
   val delayStopMs = 2000
 
   val lineThickness = 2.0f
+  val defaultBackgroundColour = new Color(124, 255, 64)
 }
 object Direction extends Enumeration {
   type Direction = Value
@@ -345,7 +346,7 @@ class Maze(noSound: Boolean) {
 object Maze {
   def main(args: Array[String]): Unit = {
     val noSound = if (args.length > 0)
-	    args(0).trim.toLowerCase == "nosound"
+      args(0).trim.toLowerCase == "nosound"
     else false
     val sizeDims = new java.awt.Dimension(frameWidth + frameBorder, frameHeight + frameBorder)
     val frame = new MainFrame()
@@ -353,7 +354,7 @@ object Maze {
     frame.bounds = new Rectangle(0, 0, sizeDims.width, sizeDims.height)
     frame.title = "Simple Maze Demo v0.2"
     val maze = new Maze(noSound)
-    maze.mazePanel.background_= = new Color(124, 255, 64)
+    maze.mazePanel.peer.setBackground(defaultBackgroundColour)
     frame.contents = new BorderPanel { add(maze.mazePanel, BorderPanel.Position.Center) }
     frame.peer.addKeyListener(mkKeyListener(frame))
     frame.pack().centerOnScreen()
